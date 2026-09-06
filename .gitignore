@@ -1,0 +1,9 @@
+.venv
+__pycache__
+*.egg-info
+.pytest_cache
+
+# 端末ごとのテストスクリプト
+test.py
+
+.env

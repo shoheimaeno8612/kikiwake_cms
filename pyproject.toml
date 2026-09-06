@@ -1,0 +1,29 @@
+[project]
+name = "kikiwake-cms"
+version = "0.1.0"
+description = "Data generation pipeline for the personalized dictation app"
+requires-python = ">=3.11"
+dependencies = [
+  "google-genai",
+  "google-cloud-texttospeech",
+  "supabase",
+  "boto3",
+  "python-dotenv",
+  "tqdm",
+  "mutagen",
+  "pandas",
+  "tenacity",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+kikiwake-cms = "kikiwake_cms.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
