@@ -49,7 +49,10 @@ def run(settings: Settings) -> None:
         audio_bytes = storage_client.fetch_public(row["audio"][0]["audio_path"])
 
         interaction = genai_client.generate_json(
-            model="gemini-3.5-flash-lite",
+            # 発話区間の特定は軽量モデルで十分な精度が出る(構造チェックは全通過、
+            # 参照値との差は平均 0.1〜0.4 秒)。既定モデルは config.Settings で管理し、
+            # 精度の高い 3.5-flash-lite は音声特徴解析用に温存する。
+            model=settings.audio_alignment_model,
             response_schema=AudioSentences.model_json_schema(),
             input=[
                 {

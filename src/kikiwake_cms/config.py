@@ -24,6 +24,9 @@ class Settings:
     # コンテンツ生成バッチのページングサイズ
     translation_batch_size: int = 50
     audio_alignment_limit: int = 500
+    # 発話区間の特定は軽量モデルで十分な精度が出るため 3.1-flash-lite を既定にする。
+    # 精度の高い 3.5-flash-lite は音声特徴解析用に温存する。
+    audio_alignment_model: str = "gemini-3.1-flash-lite"
     json_export_limit: int = 1000
     json_export_chunk_size: int = 100
 

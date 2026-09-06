@@ -64,7 +64,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     extract_audio_features = subparsers.add_parser(
         "extract-audio-features",
-        help="Extract audio features (connected speech) and utterance segments from audio.",
+        help=(
+            "Extract audio features (connected speech) from audio. "
+            "Requires utterance segments (analyze-audio-alignment) to be filled first."
+        ),
     )
     extract_audio_features.add_argument(
         "-c",

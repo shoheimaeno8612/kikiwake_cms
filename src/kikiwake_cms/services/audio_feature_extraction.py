@@ -18,13 +18,6 @@ from .audio_feature_extraction_data import audio_features, system_instruction
 logger = get_logger(__name__)
 
 
-# 発話区間(sentenceが音声内で読まれている区間)
-class SentenceSegment(BaseModel):
-    sentence_id: int
-    start_seconds: float
-    end_seconds: float
-
-
 # 音声的特徴の解析結果
 class SentenceAudioFeature(BaseModel):
     sentence_id: int
@@ -34,38 +27,32 @@ class SentenceAudioFeature(BaseModel):
     translation: str | None
 
 
-class AudioAnalysis(BaseModel):
-    segments: List[SentenceSegment]
+class SentenceAudioFeatures(BaseModel):
     result: List[SentenceAudioFeature]
 
 
-def build_prompt(content: dict, known_segments: list | None) -> str:
+def build_prompt(content: dict, segments: list) -> str:
     """音声特徴解析用のプロンプトを組み立てる純粋関数。
 
     content には content_id / level / sentences(sentence_id, sentence, sentence_index) が
-    含まれる想定。known_segments が与えられた場合のみ [Known Audio Segments] を埋め込む。
+    含まれる想定。segments は audio.sentences(発話区間)で、各文が音声内のどこで発話される
+    かを [Audio Segments] としてモデルに与える(発話区間の特定は別処理で済ませてある前提)。
     """
-    known_segments_block = ""
-    if known_segments:
-        known_segments_block = (
-            "\n[Known Audio Segments]\n"
-            f"{json.dumps(known_segments, ensure_ascii=False)}\n"
-        )
-
     return f"""
 入力のaudioは、[Content]のsentenceを sentence_index の順に読み上げた音声ファイルです。
+各sentenceが音声内のどこで発話されているかは [Audio Segments] に秒単位で与えられています。
 
-音声を実際に聞き、以下の2つを解析してください。
-
-1. 各sentenceの発話区間(start_seconds / end_seconds)
-2. 各sentenceの音声的特徴(linking / flapping / weak_form / assimilation / elision)
+音声を実際に聞き、各sentenceの音声的特徴(linking / flapping / weak_form / assimilation / elision)を抽出してください。
 
 [Feature Master]
 {json.dumps(audio_features, ensure_ascii=False)}
 
 [Content]
 {json.dumps(content, ensure_ascii=False)}
-{known_segments_block}
+
+[Audio Segments]
+{json.dumps(segments, ensure_ascii=False)}
+
 各featureについて、以下を返してください。
 
 * sentence_id
@@ -85,13 +72,11 @@ feature master listに存在しないfeature_idを使用してはいけません
 
 学習価値の低い特徴を過剰に抽出せず、リスニングで学習者がつまずきやすいfeatureを優先してください。
 
-segmentsには、すべてのsentenceの発話区間を含めてください。
-
 response_schemaに従ってJSONのみを出力してください。
 """
 
 
-def parse_analysis(output_text: str) -> dict:
+def parse_result(output_text: str) -> dict:
     """Geminiのレスポンスをdictにパースする。失敗時はデバッグ保存してから再raiseする。"""
     try:
         return json.loads(output_text)
@@ -105,12 +90,16 @@ def parse_analysis(output_text: str) -> dict:
 
 
 def run(count: int, gen_model: str, settings: Settings) -> None:
-    """文の音声的特徴(connected speech)と発話区間をGeminiで解析する。"""
+    """文の音声的特徴(connected speech)をGeminiで解析する。
+
+    発話区間(audio.sentences)は analyze-audio-alignment で先に埋めておく前提。
+    ここでは区間が確定済みのaudioだけを対象にし、音声特徴のみを抽出する。
+    """
     genai_client = GenaiClient(settings)
     supabase_client = SupabaseClient(settings)
     storage_client = StorageClient(settings)
 
-    # 音声特徴解析が未処理のaudioを取得
+    # 音声特徴が未処理、かつ発話区間が確定済みのaudioを取得
     response = (
         supabase_client.raw.table("contents")
         .select(
@@ -120,6 +109,8 @@ def run(count: int, gen_model: str, settings: Settings) -> None:
             count="exact",
         )
         .is_("audio.feature_extracted_at", "null")
+        .not_.is_("audio.sentences", "null")
+        .neq("audio.sentences", "[]")
         .not_.is_("sentences", "null")
         .order("content_id")
         .order("sentence_index", foreign_table="sentences")
@@ -148,7 +139,7 @@ def run(count: int, gen_model: str, settings: Settings) -> None:
 
         for audio in content["audio"]:
             audio_id = audio["audio_id"]
-            known_segments = audio.get("sentences") or None
+            segments = audio.get("sentences") or []
 
             try:
                 audio_bytes = storage_client.fetch_public(audio["audio_path"])
@@ -165,7 +156,7 @@ def run(count: int, gen_model: str, settings: Settings) -> None:
                 input=[
                     {
                         "type": "text",
-                        "text": build_prompt(content_for_prompt, known_segments),
+                        "text": build_prompt(content_for_prompt, segments),
                     },
                     {
                         "type": "audio",
@@ -173,12 +164,12 @@ def run(count: int, gen_model: str, settings: Settings) -> None:
                         "mime_type": "audio/mp3",
                     },
                 ],
-                response_schema=AudioAnalysis.model_json_schema(),
+                response_schema=SentenceAudioFeatures.model_json_schema(),
                 system_instruction=system_instruction,
             )
 
             try:
-                result_dict = parse_analysis(interaction.output_text)
+                result_dict = parse_result(interaction.output_text)
             except json.JSONDecodeError:
                 logger.exception(
                     "Skipping audio_id=%s due to unparseable response.", audio_id
@@ -220,18 +211,6 @@ def run(count: int, gen_model: str, settings: Settings) -> None:
                         audio_feature.get("sentence_id"),
                     )
                     unsaved.append(audio_feature)
-
-            # 発話区間が未設定のaudioにのみsegmentsを補完する
-            # (専用の analyze-audio-alignment の結果は上書きしない)
-            if not known_segments and result_dict["segments"]:
-                try:
-                    supabase_client.raw.table("audio").update(
-                        {"sentences": result_dict["segments"]}
-                    ).eq("audio_id", audio_id).execute()
-                except Exception:
-                    logger.exception(
-                        "Failed to save audio segments for audio_id=%s", audio_id
-                    )
 
             supabase_client.raw.table("audio").update(
                 {

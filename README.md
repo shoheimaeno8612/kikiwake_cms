@@ -24,7 +24,7 @@ kikiwake-cms backfill-audio-duration                        # duration未設定�
 kikiwake-cms analyze-audio-alignment                        # 文ごとの発話区間をGeminiで特定
 kikiwake-cms translate-sentences                            # 未翻訳のsentencesを翻訳
 kikiwake-cms extract-features -c 50 -m gemini-3.6-flash    # 言語的特徴を抽出
-kikiwake-cms extract-audio-features -c 20 -m gemini-3.6-flash  # 音声特徴(連結音声現象)+発話区間を解析
+kikiwake-cms extract-audio-features -c 20 -m gemini-3.6-flash  # 音声特徴(連結音声現象)を解析(要: 発話区間の事前解析)
 kikiwake-cms export-json                                    # アプリ配信用JSONをR2に出力
 ```
 

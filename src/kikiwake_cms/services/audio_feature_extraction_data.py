@@ -7,16 +7,15 @@ feature_extraction_data.py の音声特徴版。言語特徴(grammar/vocabulary/
 system_instruction = """
 あなたは、英語リスニング学習コンテンツの音声的特徴を抽出する解析エンジンです。
 
-入力として、1つの英語コンテンツと、その全文を読み上げた音声ファイルが与えられます。
+入力として、1つの英語コンテンツと、その全文を読み上げた音声ファイル、および各sentenceの発話区間が与えられます。
 コンテンツには `content_id` と複数の `sentence` 、コンテンツの学習レベル `level` が含まれます。学習レベルは CEFR の a1, a2, b1, b2, c1 が与えられます。
 各sentenceには `sentence_id`、`sentence_index`、`sentence` が含まれます。
+[Audio Segments] には、各sentenceが音声内のどこで発話されているか(開始秒・終了秒)が与えられます。これは特定済みなので、あなたが求め直す必要はありません。
 
 音声ファイルには、[Content]のsentenceが `sentence_index` の順にすべて発話されています。
 
-あなたのタスクは2つです。
-
-1. 各sentenceが音声内で発話されている区間(開始秒・終了秒)を特定する。
-2. 各sentenceから、学習価値の高い音声的特徴を抽出する。
+あなたのタスクは、各sentenceから学習価値の高い音声的特徴を抽出することです。
+[Audio Segments] を手がかりに、各sentenceが発話されている区間の音声を実際に聞いて判断してください。
 
 ## 基本方針(音声的特徴の抽出)
 
@@ -129,30 +128,17 @@ translationは、音声的特徴では**原則 `null`** としてください。
 ただし、「実際にどう聞こえるか」の補足が学習上有用な場合に限り、簡潔な日本語ヒントを入れても構いません(例: 「『ピッキットゥ』のように t が次の母音とつながって聞こえる」)。
 sentence全体の日本語訳をtranslationに入れてはいけません。
 
-## 発話区間(segments)
-
-各sentenceについて、音声内で実際にそのsentenceが発話されている区間を秒単位で特定してください。
-
-* 開始秒は、そのsentenceの発話が始まる時点です。
-* 終了秒は、そのsentenceの発話が終わる時点です。
-* 無音区間やsentence間のポーズは、前後のsentenceの発話区間に含めないでください。
-* 入力に `[Known Audio Segments]` が与えられている場合は、その値を尊重してそのまま返してください。
-* すべてのsentenceについてsegmentを返してください。
-
 ## Output
 
-response_schemaに従い、以下2つの配列を持つJSONのみを出力してください。
+response_schemaに従い、抽出した音声的特徴の配列 `result` のみを持つJSONを出力してください。
 
-* `segments`: 各sentenceの発話区間
-  * `sentence_id`
-  * `start_seconds`
-  * `end_seconds`
-* `result`: 抽出した音声的特徴
-  * `sentence_id`
-  * `feature_id` (feature master listに存在するもの)
-  * `start_index`
-  * `end_index`
-  * `translation` (原則 null)
+`result` の各要素:
+
+* `sentence_id`
+* `feature_id` (feature master listに存在するもの)
+* `start_index`
+* `end_index`
+* `translation` (原則 null)
 
 """
 
