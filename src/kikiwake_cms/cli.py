@@ -4,6 +4,7 @@ from .config import load_settings
 from .services import (
     audio_alignment,
     audio_duration_backfill,
+    audio_feature_extraction,
     audio_generation,
     content_generation,
     feature_extraction,
@@ -61,6 +62,24 @@ def build_parser() -> argparse.ArgumentParser:
         "-m", "--model", required=True, help="Model used for the feature extraction."
     )
 
+    extract_audio_features = subparsers.add_parser(
+        "extract-audio-features",
+        help="Extract audio features (connected speech) and utterance segments from audio.",
+    )
+    extract_audio_features.add_argument(
+        "-c",
+        "--count",
+        required=True,
+        type=int,
+        help="Number of audio processed for the audio feature extraction.",
+    )
+    extract_audio_features.add_argument(
+        "-m",
+        "--model",
+        required=True,
+        help="Model used for the audio feature extraction.",
+    )
+
     subparsers.add_parser(
         "export-json", help="Export contents as JSON files to R2, grouped by level/target/category."
     )
@@ -85,6 +104,10 @@ def main() -> None:
         translation.run(settings=settings)
     elif args.command == "extract-features":
         feature_extraction.run(count=args.count, gen_model=args.model, settings=settings)
+    elif args.command == "extract-audio-features":
+        audio_feature_extraction.run(
+            count=args.count, gen_model=args.model, settings=settings
+        )
     elif args.command == "export-json":
         json_export.run(settings=settings)
 

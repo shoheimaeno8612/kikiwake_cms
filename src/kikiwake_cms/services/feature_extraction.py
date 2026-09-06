@@ -37,13 +37,16 @@ def run(count: int, gen_model: str, settings: Settings) -> None:
 
     for _ in tqdm(range(10)):
         # 特徴解析が未処理の文を取得
+        # 未処理判定は content レベルの feature_extracted_at のみで行う。
+        # sentence_features には音声特徴の行(audio_id あり)も入るため、
+        # sentence 単位の "sentence_features is null" では音声特徴が先に付いた
+        # sentence の言語特徴が抽出されなくなってしまう。
         response = (
             supabase_client.raw.table("contents")
             .select(
                 "content_id,levels(level_id,code),sentences(sentence_id,sentence,sentence_index,sentence_features(*))",
                 count="exact",
             )
-            .is_("sentences.sentence_features", "null")
             .is_("feature_extracted_at", "null")
             .not_.is_("sentences", "null")
             .order("content_id")
