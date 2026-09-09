@@ -13,6 +13,10 @@ pip install -e ".[dev]"
 
 リポジトリルートに `.env` を用意する(`.env.example` を参照)。
 
+GeminiのAPIキーは `GEMINI_API_KEY` / `GEMINI_API_KEY_2` / `GEMINI_API_KEY_3` に最大3本まで設定できる。
+レート制限(429)に達したキーがあれば、待機せずに次のキーへ切り替えてリクエストする。
+必須は `GEMINI_API_KEY` のみで、2本目以降は設定されていれば使う。
+
 ## 実行方法
 
 インストール後は `kikiwake-cms` コマンドで各処理を実行できる。

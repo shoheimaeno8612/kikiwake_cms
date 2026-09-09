@@ -7,6 +7,10 @@ from dotenv import find_dotenv, load_dotenv
 # 遡って.envを探す。実行時のcwdに依存していた旧 load_dotenv("../../.env") の問題を解消する。
 load_dotenv(find_dotenv())
 
+# Geminiの無料枠レート制限はAPIキー単位で課される。1本目が429で弾かれたときに
+# 2本目・3本目へフォールバックできるよう、.envには最大3本のキーを設定する。
+GEMINI_API_KEY_ENV_VARS = ("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3")
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -15,7 +19,8 @@ class Settings:
     r2_endpoint_url: str
     r2_access_key_id: str
     r2_secret_access_key: str
-    gemini_api_key: str
+    # レート制限時のフォールバック順に並んだGeminiのAPIキー。先頭が主キー。
+    gemini_api_keys: tuple[str, ...]
 
     r2_bucket: str = "personalized-dictation"
     r2_public_base_url: str = "https://pub-e4cda8c8642a464f92027ed892aa44e4.r2.dev"
@@ -30,6 +35,31 @@ class Settings:
     json_export_limit: int = 1000
     json_export_chunk_size: int = 100
 
+    @property
+    def gemini_api_key(self) -> str:
+        """主キー(1本目)。単一キーを前提とする箇所からの参照用。"""
+        return self.gemini_api_keys[0]
+
+
+def load_gemini_api_keys() -> tuple[str, ...]:
+    """.envに設定されたGeminiのAPIキーをフォールバック順に読み込む。
+
+    GEMINI_API_KEY は必須。GEMINI_API_KEY_2 以降はレート制限時の切り替え先として
+    使うだけなので任意とし、設定済みのものだけを順に採用する。同じキーを重複して
+    設定してもフォールバック先としては機能しないため取り除く。
+    """
+    keys: list[str] = []
+    for env_var in GEMINI_API_KEY_ENV_VARS:
+        key = os.environ.get(env_var, "").strip()
+        if key and key not in keys:
+            keys.append(key)
+
+    if not keys:
+        # 従来どおり必須の環境変数が無い場合はKeyErrorで落とす。
+        raise KeyError(GEMINI_API_KEY_ENV_VARS[0])
+
+    return tuple(keys)
+
 
 def load_settings() -> Settings:
     return Settings(
@@ -38,5 +68,5 @@ def load_settings() -> Settings:
         r2_endpoint_url=os.environ["R2_ENDPOINT_URL"],
         r2_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
         r2_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
-        gemini_api_key=os.environ["GEMINI_API_KEY"],
+        gemini_api_keys=load_gemini_api_keys(),
     )
