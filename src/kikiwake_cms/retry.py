@@ -71,6 +71,34 @@ def _genai_wait(retry_state):
     return _wait_policy(max_wait=60)(retry_state)
 
 
+def is_rate_limit_error(exc: BaseException) -> bool:
+    """Geminiのレート制限(429)エラーかどうかを判定する。
+
+    レート制限はAPIキー単位で課されるため、この種のエラーに限っては待機せずに
+    別のAPIキーへ切り替えて再試行できる。5xxやネットワーク断はキーを変えても
+    解消しないので、ここでは対象外とする。
+    """
+    try:
+        from google.genai._gaos.lib import compat_errors
+
+        if isinstance(exc, compat_errors.RateLimitError):
+            return True
+        if isinstance(exc, compat_errors.APIStatusError):
+            return exc.status_code == 429
+    except ImportError:
+        pass
+
+    try:
+        from google.genai import errors as genai_errors
+
+        if isinstance(exc, genai_errors.ClientError):
+            return getattr(exc, "code", None) == 429
+    except ImportError:
+        pass
+
+    return False
+
+
 def is_transient_genai_error(exc: BaseException) -> bool:
     # client.interactions.create() (本プロジェクトが使う新API) は
     # google.genai._gaos.lib.compat_errors 配下のOpenAI SDK風の例外階層を送出する。
