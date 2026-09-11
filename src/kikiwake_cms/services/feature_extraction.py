@@ -134,7 +134,7 @@ def run(count: int, gen_model: str, settings: Settings) -> None:
         # supabaseに保存
         saved = []
         unsaved = []
-        for sentence_feature in tqdm(result_dict["result"]):
+        for sentence_feature in result_dict["result"]:
             try:
                 supabase_client.raw.table("sentence_features").insert(
                     {
