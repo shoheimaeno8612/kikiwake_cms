@@ -1,4 +1,5 @@
 import os
+import re
 from dataclasses import dataclass
 
 from dotenv import find_dotenv, load_dotenv
@@ -8,8 +9,11 @@ from dotenv import find_dotenv, load_dotenv
 load_dotenv(find_dotenv())
 
 # Geminiの無料枠レート制限はAPIキー単位で課される。1本目が429で弾かれたときに
-# 2本目・3本目へフォールバックできるよう、.envには最大3本のキーを設定する。
-GEMINI_API_KEY_ENV_VARS = ("GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3")
+# 次のキーへフォールバックできるよう、.envには GEMINI_API_KEY_2, _3, _4 ... と
+# 連番で何本でもキーを設定できる。本数をコード側で列挙しないので、キーを増やすときは
+# .envに1行足すだけでよい。
+GEMINI_API_KEY_ENV_VAR = "GEMINI_API_KEY"
+_GEMINI_API_KEY_ENV_PATTERN = re.compile(rf"^{GEMINI_API_KEY_ENV_VAR}(?:_(\d+))?$")
 
 
 @dataclass(frozen=True)
@@ -41,22 +45,35 @@ class Settings:
         return self.gemini_api_keys[0]
 
 
+def gemini_api_key_env_vars() -> tuple[str, ...]:
+    """設定済みのGeminiのAPIキー環境変数名をフォールバック順に返す。"""
+    # 添字なしの GEMINI_API_KEY を主キー(1本目)とみなす。文字列ソートでは
+    # _10 が _2 より前に来てしまうため、添字を整数に直して並べ替える。
+    numbered = [
+        (int(match.group(1) or 1), name)
+        for name in os.environ
+        if (match := _GEMINI_API_KEY_ENV_PATTERN.match(name))
+    ]
+    return tuple(name for _, name in sorted(numbered))
+
+
 def load_gemini_api_keys() -> tuple[str, ...]:
     """.envに設定されたGeminiのAPIキーをフォールバック順に読み込む。
 
     GEMINI_API_KEY は必須。GEMINI_API_KEY_2 以降はレート制限時の切り替え先として
-    使うだけなので任意とし、設定済みのものだけを順に採用する。同じキーを重複して
-    設定してもフォールバック先としては機能しないため取り除く。
+    使うだけなので任意とし、設定済みのものだけを順に採用する。途中の番号が空欄でも
+    それ以降の番号は使う。同じキーを重複して設定してもフォールバック先としては
+    機能しないため取り除く。
     """
     keys: list[str] = []
-    for env_var in GEMINI_API_KEY_ENV_VARS:
+    for env_var in gemini_api_key_env_vars():
         key = os.environ.get(env_var, "").strip()
         if key and key not in keys:
             keys.append(key)
 
     if not keys:
         # 従来どおり必須の環境変数が無い場合はKeyErrorで落とす。
-        raise KeyError(GEMINI_API_KEY_ENV_VARS[0])
+        raise KeyError(GEMINI_API_KEY_ENV_VAR)
 
     return tuple(keys)
 
