@@ -202,6 +202,7 @@ def run(count: int, gen_model: str, settings: Settings) -> None:
                             "start_index": audio_feature["start_index"],
                             "end_index": audio_feature["end_index"],
                             "translation": audio_feature["translation"],
+                            "model": gen_model,
                         }
                     ).execute()
                     saved.append(audio_feature)

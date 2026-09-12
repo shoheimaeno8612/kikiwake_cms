@@ -143,6 +143,7 @@ def run(count: int, gen_model: str, settings: Settings) -> None:
                         "start_index": sentence_feature["start_index"],
                         "end_index": sentence_feature["end_index"],
                         "translation": sentence_feature["translation"],
+                        "model": gen_model,
                     }
                 ).execute()
 

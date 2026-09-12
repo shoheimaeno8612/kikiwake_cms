@@ -23,6 +23,10 @@ class FakeQueryBuilder:
         self._pending_insert = None
 
     def __getattr__(self, name):
+        # .not_.is_(...) のように、呼び出さずに繋ぐ修飾子も許容する。
+        if name == "not_":
+            return self
+
         def _chain(*args, **kwargs):
             if name == "insert" and args:
                 self._pending_insert = args[0]
